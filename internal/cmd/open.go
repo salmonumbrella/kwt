@@ -22,6 +22,8 @@ import (
 )
 
 var (
+	openPane                 bool
+	openAgent                string
 	openLayout               string
 	openSelectLayout         bool
 	openStartSession         bool
@@ -32,6 +34,9 @@ var (
 	openExpectedSession      string
 
 	discoverOpenWorktree = discovery.DiscoverWorktree
+	splitOpenPane        = func(ctx context.Context, names []string, path, command string) error {
+		return tmux.NewTmuxCommandWithStripNames("tmux", names).SplitPane(ctx, path, command)
+	}
 
 	newOpenWorkspaceRunner = func(names []string) openWorkspaceRunner {
 		return newCommandWorkspaceSessions(names, os.Stderr)
@@ -52,7 +57,9 @@ var openCmd = &cobra.Command{
 directory and attach to its tmux workspace, creating the workspace with the
 resolved layout if it does not yet exist. A pattern filters the worktree list.
 An exact worktree path or registered directory workspace path resolves directly.
-Add --start-session to create or repair the workspace without attaching.`,
+Add --start-session to create or repair the workspace without attaching.
+Inside tmux, --pane splits the current window without managing a workspace
+session or layout. Add --agent <name> to run a configured agent in that pane.`,
 	Example: `  # Pick a worktree and open its workspace
   kwt open
 
@@ -64,6 +71,9 @@ Add --start-session to create or repair the workspace without attaching.`,
 
   # Open a registered directory workspace
   kwt open /path/to/directory-workspace
+
+  # Open a worktree beside the current pane
+  kwt open mybranch --pane --agent codex
 
   # Force a specific layout
   kwt open --layout focus
@@ -80,6 +90,8 @@ Add --start-session to create or repair the workspace without attaching.`,
 
 func init() {
 	rootCmd.AddCommand(openCmd)
+	openCmd.Flags().BoolVar(&openPane, "pane", false, "Split the current tmux window at the worktree without managing its workspace session")
+	openCmd.Flags().StringVar(&openAgent, "agent", "", "Configured agent to run with --pane (default: plain shell)")
 	openCmd.Flags().StringVar(&openLayout, "layout", "", "Workspace layout preset to launch (\"none\" = blank session)")
 	openCmd.Flags().BoolVarP(&openSelectLayout, "select-layout", "L", false,
 		"Fuzzy-pick a workspace layout")
@@ -109,12 +121,17 @@ func runOpenWithContext(
 	args []string,
 	ctx *CommandContext,
 ) error {
+	if err := validateOpenPaneFlags(cmd); err != nil {
+		return err
+	}
 	guardedOpen, err := validateExpectedOpenFlags(cmd, args)
 	if err != nil {
 		return err
 	}
-	if err := tmux.ValidateLayouts(ctx.Config.Layouts, ctx.Config.Agents); err != nil {
-		return err
+	if !openPane {
+		if err := tmux.ValidateLayouts(ctx.Config.Layouts, ctx.Config.Agents); err != nil {
+			return err
+		}
 	}
 	if err := validateOpenOutputMode(args, openStartSession, openJSON); err != nil {
 		return err
@@ -132,6 +149,9 @@ func runOpenWithContext(
 			ctx.Config.Workspaces,
 			args[0],
 		); ok {
+			if openPane {
+				return fmt.Errorf("--pane supports Git worktrees only, not registered directory workspaces")
+			}
 			if guardedOpen {
 				return service.NewError(
 					service.InvalidRequest,
@@ -194,6 +214,28 @@ func runOpenWithContext(
 		config.StdinInteractive(),
 		openResultCallback(cmd),
 	)
+}
+
+func validateOpenPaneFlags(cmd *cobra.Command) error {
+	if !openPane {
+		if commandFlagChanged(cmd, "agent") || openAgent != "" {
+			return fmt.Errorf("--agent requires --pane")
+		}
+		return nil
+	}
+	for _, name := range []string{
+		"layout", "select-layout", "start-session", "json",
+		"expected-repository", "expected-registration", "expected-generation", "expected-session",
+	} {
+		if commandFlagChanged(cmd, name) {
+			return fmt.Errorf("--pane cannot be combined with --%s", name)
+		}
+	}
+	if commandFlagChanged(cmd, "agent") && openAgent == "" {
+		return fmt.Errorf("--agent requires a nonempty configured agent name")
+	}
+	_, err := tmux.CallerPane()
+	return err
 }
 
 type openSessionResult struct {
@@ -456,6 +498,22 @@ func openSelectedWorktreeWithResult(
 		if err := acknowledgeRemoteSourcePath(entry.Path); err != nil {
 			return err
 		}
+	}
+
+	if openPane {
+		layout := tmux.BlankLayout()
+		if openAgent != "" {
+			layout.Panes[0] = "agent:" + openAgent
+		}
+		layout, err := tmux.ResolvePaneCommands(layout, ctx.Config.Agents)
+		if err != nil {
+			return err
+		}
+		names := credentials.ProtectedNames(ctx.Config)
+		_, err = runWorktreeSessionEstablishment(commandCtx, entry.Path, entry.Generation, names, func(string) error {
+			return splitOpenPane(commandCtx, names, entry.Path, layout.Panes[0])
+		})
+		return err
 	}
 
 	// Only resolve the target repo's default layout (which requires

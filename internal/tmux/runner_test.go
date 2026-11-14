@@ -313,6 +313,9 @@ func (m *mockWorkspaceTmux) RunCommandOutputContext(
 	if m.failOutputOnCall != 0 && m.outputCalls == m.failOutputOnCall {
 		return "", fmt.Errorf("boom on call %d", m.outputCalls)
 	}
+	if len(args) == 5 && args[0] == "display-message" && args[4] == "#{default-shell}" {
+		return m.sessionDefaultShell + "\n", nil
+	}
 	if len(args) > 0 && args[0] == "show-options" {
 		if len(args) > 1 && args[1] == "-gv" {
 			if m.globalDefaultShell != "" {

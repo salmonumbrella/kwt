@@ -420,6 +420,24 @@ An exact worktree-root path is resolved directly from Git before pattern
 matching, including registered primary checkouts and linked worktrees outside
 the configured global worktree base.
 
+Inside tmux, `kwt open <pattern-or-path> --pane` splits the caller's current
+window at the selected Git worktree without creating, repairing, or attaching
+to its workspace session. With no pattern, the normal worktree picker is used.
+The new pane runs a plain login shell, ignoring the session's `default-command`.
+Add `--agent <name>` to run that command from the global `[agents]` configuration:
+
+```sh
+kwt open mybranch --pane
+kwt open mybranch --pane --agent codex
+```
+
+This is placement only: no workspace layout or bootstrap is applied, and the
+pane uses the caller's existing tmux server and session environment. Protected
+pull-request imports still require `kwt pr attach`. Pane mode does not support
+registered directory workspaces, `--layout`, `--select-layout`, `--start-session`,
+`--json`, or any `--expected-*` identity flag. Outside tmux it returns an error;
+`--agent` requires `--pane` and a nonempty configured command.
+
 On Unix-like systems, an external direct or protected attachment replaces
 the `kwt` process with the tmux client. tmux therefore owns signal handling and
 the final exit status, and no waiting `kwt` parent remains. Windows retains a
