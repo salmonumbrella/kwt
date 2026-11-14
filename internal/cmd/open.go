@@ -35,7 +35,7 @@ var (
 
 	discoverOpenWorktree = discovery.DiscoverWorktree
 	splitOpenPane        = func(ctx context.Context, names []string, path, command string) error {
-		return tmux.NewTmuxCommandWithStripNames("tmux", names).SplitPane(ctx, path, command)
+		return tmux.NewTmuxCommandWithStripNames("tmux", names).SplitPane(ctx, os.Getenv("TMUX_PANE"), path, command)
 	}
 
 	newOpenWorkspaceRunner = func(names []string) openWorkspaceRunner {
@@ -234,8 +234,10 @@ func validateOpenPaneFlags(cmd *cobra.Command) error {
 	if commandFlagChanged(cmd, "agent") && openAgent == "" {
 		return fmt.Errorf("--agent requires a nonempty configured agent name")
 	}
-	_, err := tmux.CallerPane()
-	return err
+	if os.Getenv("TMUX") == "" || os.Getenv("TMUX_PANE") == "" {
+		return fmt.Errorf("--pane requires running inside tmux")
+	}
+	return nil
 }
 
 type openSessionResult struct {

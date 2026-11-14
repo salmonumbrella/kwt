@@ -33,7 +33,7 @@ func TestSplitPaneOnCallerServer(t *testing.T) {
 	run("set-option", "-t", "caller", "default-command", "exit 99")
 	dir := t.TempDir()
 	command := NewTmuxCommand("tmux") // No -L: the caller's socket must win.
-	require.NoError(t, command.SplitPane(t.Context(), dir, ""))
+	require.NoError(t, command.SplitPane(t.Context(), caller[2], dir, ""))
 	pane := run("display-message", "-p", "-t", "caller", "#{pane_id}")
 	require.NotEqual(t, caller[2], pane)
 	require.Regexp(t, `^[1-9][0-9]*$`, run("display-message", "-p", "-t", pane, "#{pane_pid}"))
@@ -43,7 +43,7 @@ func TestSplitPaneOnCallerServer(t *testing.T) {
 		return run("display-message", "-p", "-t", pane, "#{pane_dead}|#{pane_current_command}") == "0|sh"
 	}, time.Second, 10*time.Millisecond, "plain shell must run despite default-command")
 	marker := filepath.Join(dir, "agent marker")
-	require.NoError(t, command.SplitPane(t.Context(), dir, "printf agent > \""+utils.EscapeForShell(marker)+"\"; exec /bin/sh"))
+	require.NoError(t, command.SplitPane(t.Context(), caller[2], dir, "printf agent > \""+utils.EscapeForShell(marker)+"\"; exec /bin/sh"))
 	require.Eventually(t, func() bool { data, err := os.ReadFile(marker); return err == nil && string(data) == "agent" }, time.Second, 10*time.Millisecond)
 	require.Equal(t, "caller", run("list-sessions", "-F", "#{session_name}"))
 	require.Equal(t, "exit 99", run("show-options", "-v", "-t", "caller", "default-command"))

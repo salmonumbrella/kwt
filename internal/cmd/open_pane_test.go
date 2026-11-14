@@ -49,12 +49,18 @@ func TestOpenPaneRejectsIncompatibleFlags(t *testing.T) {
 		err := runOpenWithContext(cmd, nil, &CommandContext{Config: &models.Config{}})
 		require.ErrorContains(t, err, "--agent requires --pane")
 	})
-	t.Run("outside tmux", func(t *testing.T) {
-		cmd := setOpenPaneTestFlags(t)
-		t.Setenv("TMUX", "")
-		err := runOpenWithContext(cmd, nil, &CommandContext{Config: &models.Config{}})
-		require.ErrorContains(t, err, "inside tmux")
-	})
+	for _, tc := range []struct{ name, tmux, pane string }{
+		{"outside tmux", "", "%42"},
+		{"missing caller pane", "/tmp/server,123,0", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := setOpenPaneTestFlags(t)
+			t.Setenv("TMUX", tc.tmux)
+			t.Setenv("TMUX_PANE", tc.pane)
+			err := runOpenWithContext(cmd, nil, &CommandContext{Config: &models.Config{}})
+			require.ErrorContains(t, err, "inside tmux")
+		})
+	}
 	t.Run("directory workspace", func(t *testing.T) {
 		cmd := setOpenPaneTestFlags(t)
 		path := t.TempDir()

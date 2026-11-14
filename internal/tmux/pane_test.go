@@ -8,8 +8,6 @@ import (
 )
 
 func TestSplitPane(t *testing.T) {
-	t.Setenv("TMUX", "/tmp/caller server,123,0")
-	t.Setenv("TMUX_PANE", "%42")
 	for _, tc := range []struct {
 		name, command, shell, want string
 		outputErr                  error
@@ -23,7 +21,7 @@ func TestSplitPane(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mock := &mockWorkspaceTmux{sessionDefaultShell: tc.shell, outputErr: tc.outputErr, failRunOnCall: tc.failRun}
-			err := splitPane(t.Context(), mock, "/work/my branch", tc.command)
+			err := splitPane(t.Context(), mock, "%42", "/work/my branch", tc.command)
 			if tc.want != "" {
 				require.ErrorContains(t, err, tc.want)
 				return
@@ -41,17 +39,9 @@ func TestSplitPane(t *testing.T) {
 			require.Equal(t, want, mock.calls, "placement must not create, attach, bootstrap, or arrange a session")
 		})
 	}
-	for _, tc := range []struct{ name, tmux, pane, path, want string }{
-		{"outside", "", "", "/work", "inside tmux"},
-		{"missing caller pane", "/tmp/server,123,0", "", "/work", "inside tmux"},
-		{"format cwd", "/tmp/server,123,0", "%42", "/work/#{pane_id}", "format syntax"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("TMUX", tc.tmux)
-			t.Setenv("TMUX_PANE", tc.pane)
-			mock := &mockWorkspaceTmux{}
-			require.ErrorContains(t, splitPane(t.Context(), mock, tc.path, ""), tc.want)
-			require.Empty(t, mock.calls)
-		})
-	}
+	t.Run("format cwd", func(t *testing.T) {
+		mock := &mockWorkspaceTmux{}
+		require.ErrorContains(t, splitPane(t.Context(), mock, "%42", "/work/#{pane_id}", ""), "format syntax")
+		require.Empty(t, mock.calls)
+	})
 }

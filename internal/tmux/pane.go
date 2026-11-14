@@ -3,23 +3,13 @@ package tmux
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 )
 
-// CallerPane identifies the invoking pane on the caller's tmux server.
-func CallerPane() (string, error) {
-	pane := os.Getenv("TMUX_PANE")
-	if os.Getenv("TMUX") == "" || pane == "" {
-		return "", fmt.Errorf("--pane requires running inside tmux")
-	}
-	return pane, nil
-}
-
 // SplitPane places a shell or command beside the caller without changing the
 // caller's session options or establishing a kwt workspace session.
-func (t *TmuxCommand) SplitPane(ctx context.Context, worktreeDir, command string) error {
-	return splitPane(ctx, t, worktreeDir, command)
+func (t *TmuxCommand) SplitPane(ctx context.Context, pane, worktreeDir, command string) error {
+	return splitPane(ctx, t, pane, worktreeDir, command)
 }
 
 type paneTmux interface {
@@ -27,11 +17,7 @@ type paneTmux interface {
 	RunCommandOutputContext(context.Context, ...string) (string, error)
 }
 
-func splitPane(ctx context.Context, t paneTmux, worktreeDir, command string) error {
-	pane, err := CallerPane()
-	if err != nil {
-		return err
-	}
+func splitPane(ctx context.Context, t paneTmux, pane, worktreeDir, command string) error {
 	if err := ValidateStartDirectory(worktreeDir); err != nil {
 		return err
 	}
