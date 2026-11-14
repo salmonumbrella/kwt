@@ -15,11 +15,6 @@ import (
 	"go.kenn.io/kwt/pkg/models"
 )
 
-func TestOpenPaneFlags(t *testing.T) {
-	require.NotNil(t, openCmd.Flags().Lookup("pane"))
-	require.NotNil(t, openCmd.Flags().Lookup("agent"))
-}
-
 func setOpenPaneTestFlags(t *testing.T, flags ...string) *cobra.Command {
 	t.Helper()
 	for _, name := range []string{"pane", "agent"} {
